@@ -1,0 +1,116 @@
+services:
+  # Aplicacion Java
+  java-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: java-app_server
+    networks:
+      - java-network
+    volumes:
+      - reports-tests-volume:/app/reports/tests
+      - reports-coverage-volume:/app/reports/coverage
+      - documentation-volume:/app/documentation
+      # - html-volume:/app/html # no
+
+  # Servicio Nginx para el índice
+  nginx-index:
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
+    container_name: nginx-index_server
+    restart: always
+    networks:
+      - java-network
+    volumes:
+      - ./nginx-index/sites-available:/etc/nginx/sites-available
+      # - html-volume:/var/www/html # no
+      - ./nginx-index/index.html:/var/www/html/index.html
+    depends_on:
+      - java-app
+
+  # Servicio Apache para la documentacion javadoc
+  apache-documentation:
+    build:
+      context: .
+      dockerfile: Dockerfile.apache
+    container_name: apache-documentation_server
+    networks:
+      - java-network
+    volumes:
+      - ./apache-doc/sites-available:/etc/apache2/sites-available
+      - documentation-volume:/var/www/html
+    restart: always
+    depends_on:
+      - java-app
+      - nginx-index
+
+  # Servicio Nginx con los tests
+  nginx-reports-test:
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
+    container_name: nginx-reports-tests_server
+    restart: always
+    networks:
+      - java-network
+    volumes:
+      - ./nginx-test/sites-available:/etc/nginx/sites-available
+      - reports-tests-volume:/var/www/html/
+    depends_on:
+      - java-app
+      - nginx-index
+      - apache-documentation
+
+  # Servicio Nginx con los test de coverage
+  nginx-reports-coverage:
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
+    container_name: nginx-reports-coverage_server
+    restart: always
+    networks:
+      - java-network
+    volumes:
+      - ./nginx-coverage/sites-available:/etc/nginx/sites-available
+      - reports-coverage-volume:/var/www/html/
+    depends_on:
+      - java-app
+      - nginx-index
+      - apache-documentation
+      - nginx-reports-test
+
+  proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
+    container_name: proxy_server
+    volumes:
+      - ./proxy/conf/nginx.conf:/etc/nginx/nginx.conf
+      - ./proxy/certs:/etc/nginx/certs
+    ports:
+      - "80:80"
+      - "443:443"
+    restart: always
+    depends_on:
+      - java-app
+      - nginx-index
+      - apache-documentation
+      - nginx-reports-test
+      - nginx-reports-coverage
+    networks:
+      - java-network
+
+networks:
+  java-network:
+    driver: bridge
+
+volumes:
+  reports-tests-volume:
+    driver: local
+  reports-coverage-volume:
+    driver: local
+  documentation-volume:
+    driver: local
+  # html-volume:
+  #  driver: local

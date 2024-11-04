@@ -1,0 +1,4 @@
+FROM ubuntu/apache2:latest
+
+# Elimina el contenido predeterminado
+RUN rm -rf /var/www/html/*
